@@ -1,0 +1,71 @@
+// This file is part of the materials accompanying the book 
+// "The Elements of Computing Systems" by Nisan and Schocken, 
+// MIT Press. Book site: www.idc.ac.il/tecs
+// File name: projects/02/ALU.hdl
+
+/**
+ * The ALU.  Computes a pre-defined set of functions out = f(x,y)
+ * where x and y are two 16-bit inputs. The function f is selected 
+ * by a set of 6 control bits denoted zx, nx, zy, ny, f, no.
+ * The ALU operation can be described using the following pseudocode:
+ *     if zx=1 set x = 0       // 16-bit zero constant
+ *     if nx=1 set x = !x      // Bit-wise negation
+ *     if zy=1 set y = 0       // 16-bit zero constant
+ *     if ny=1 set y = !y      // Bit-wise negation
+ *     if f=1  set out = x + y // Integer 2's complement addition
+ *     else    set out = x & y // Bit-wise And
+ *     if no=1 set out = !out  // Bit-wise negation
+ *
+ * In addition to computing out, the ALU computes two 1-bit outputs:
+ *     if out=0 set zr = 1 else zr = 0 // 16-bit equality comparison
+ *     if out<0 set ng = 1 else ng = 0 // 2's complement comparison
+ */
+
+CHIP ALU {
+
+    IN  // 16-bit inputs:
+        x[16], y[16],
+        // Control bits:
+        zx, // Zero the x input
+        nx, // Negate the x input
+        zy, // Zero the y input
+        ny, // Negate the y input
+        f,  // Function code: 1 for add, 0 for and
+        no; // Negate the out output
+
+    OUT // 16-bit output
+        out[16],
+
+        // ALU output flags
+        zr, // 1 if out=0, 0 otherwise
+        ng; // 1 if out<0, 0 otherwise
+
+    PARTS:
+    // zx
+    Mux16(a = x, b = false, sel = zx, out = jx);
+    // nx
+    Not16(in = jx, out = notx);
+    Mux16(a = jx, b = notx, sel = nx, out = jx1);
+    // zy
+    Mux16(a = y, b = false, sel = zy, out = jy);
+    // ny
+    Not16(in = jy, out = noty);
+    Mux16(a = jy, b = noty, sel = ny, out = jy1);
+    // f
+    Add16(a = jx1, b = jy1, out = jxjy1);
+    And16(a = jx1, b = jy1, out = jxjy2);
+    Mux16(a = jxjy2, b = jxjy1, sel = f, out = jxjy);
+    // no
+    Not16(in = jxjy, out = njxjy);
+    // out
+    Mux16(a = jxjy, b = njxjy, sel = no, out = out);
+    // zr
+    Mux16(a = jxjy, b = njxjy, sel = no, out[0..7] = ansLow, out[8..15] = ansHi);
+    Or8Way(in = ansLow,  out = zrLow);
+    Or8Way(in = ansHi,  out = zrHi); 
+    Or(a = zrLow, b = zrHi, out = nzr);
+    Not(in = nzr, out = zr);
+    // ng
+    Mux16(a = jxjy, b = njxjy, sel = no, out[0..14] = ansRest, out[15] = ans15);
+    And(a = ans15, b = true, out = ng);
+}
